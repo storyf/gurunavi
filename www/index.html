@@ -1,0 +1,318 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src * data: gap: content: https://ssl.gstatic.com; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'">
+    <script src="components/loader.js"></script>
+    <link rel="stylesheet" href="components/loader.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script type="text/javascript"
+      src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBIjpOCQdWKWWMzDboyRortubjTY2aFe8c">
+    </script>
+    <script>
+    
+        var ind = 0;
+        var map;
+        var myLatlng;
+        var marker= new Array();
+        //表示件数を数える
+        var row_count = 0;
+
+
+        //都道府県のリストをセットするfunction
+        function set_pref_list(){
+            $.ajax({
+                url: 'http://javascriptajax.azurewebsites.net/takeda/get_pref.php?',
+                type:'GET',
+                dataType:'json'
+                
+            }).done(function(data){ //ajaxの通信に成功した場合
+                //console.log(data);
+
+                //連想配列の長さを得る Object.keysメソッド
+                //console.log(Object.keys(data.pref).length);
+                var pref_length = Object.keys(data.pref).length;
+
+                for(var i=0; i<pref_length; i++){
+                    $('#pref').append("<option area_code='" + data.pref[i].area_code + "' pref_code='" + data.pref[i].pref_code + "'>" + data.pref[i].pref_name   + "</option>")
+
+                }
+
+            }).fail(function(data){ //ajaxの通信に失敗した場合
+                alert("データの受信に失敗しました1");
+            });
+
+        }
+
+        //エリアMのリストをセットするfunction
+        function set_area_list(){
+            $.ajax({
+                url: 'http://javascriptajax.azurewebsites.net/takeda/get_area.php?',
+                type:'GET',
+                dataType:'json'
+                
+            }).done(function(data){ //ajaxの通信に成功した場合
+                //console.log(data);
+
+                //取得したデータからフィルタリングをかける
+                //選択された都道府県の状況によってフィルタリングする
+                var pref_code=$('#pref').find('option:selected').attr('pref_code');
+                var filterdata=[];
+
+                filterdata = $.grep(data.garea_middle,function(item){
+                                return item.pref.pref_code==pref_code;
+                            });                
+
+                //console.log(filterdata);
+
+                //連想配列の長さを得る Object.keysメソッド
+                //console.log(Object.keys(filterdata).length);
+                var area_length = Object.keys(filterdata).length;
+
+                $('#area_m').html("");
+                for(var i=0; i<area_length; i++){4
+                    $('#area_m').append("<option areacode_m='" + filterdata[i].areacode_m + "'>" + filterdata[i].areaname_m   + "</option>")
+                }
+
+            }).fail(function(data){ //ajaxの通信に失敗した場合
+            	alert("データの受信に失敗しました2");
+            });
+
+        }
+
+
+        //業態（カテゴリL)のリストをセットするfunction
+        function set_category_l_list(){
+            $.ajax({
+                url: 'http://javascriptajax.azurewebsites.net/takeda/get_category_l.php?',
+                type:'GET',
+                dataType:'json'
+                
+            }).done(function(data){ //ajaxの通信に成功した場合
+                //console.log(data);
+
+                //連想配列の長さを得る Object.keysメソッド
+                //console.log(Object.keys(data.category_l).length);
+                var pref_length = Object.keys(data.category_l).length;
+
+                for(var i=0; i<pref_length; i++){
+                    $('#category_l').append("<option category_l_code='" + data.category_l[i].category_l_code  + "'>" + data.category_l[i].category_l_name   + "</option>")
+                }
+
+            }).fail(function(data){ //ajaxの通信に失敗した場合
+            	alert("データの受信に失敗しました3");
+            });
+
+        }
+
+        function search_restrant(pref_code, areacode_m, category_l_code, no_smoking, takeout, private_room,parking){
+            //条件に一致するレストランの件数を検索する
+            $.ajax({
+                url: 'http://javascriptajax.azurewebsites.net/takeda/get_restrant.php?pref=' + pref_code + '&areacode_m=' + areacode_m + '&category_l=' + category_l_code +'&no_smoking=' + no_smoking + '&takeout=' + takeout +'&private_room=' + private_room +'&parking=' + parking,
+                type:'GET',
+                dataType:'json'
+                
+            }).done(function(data){ //ajaxの通信に成功した場合
+
+                //必要なページ数分、レストラン検索を行う
+                var total_hit_count = data.total_hit_count;
+                var hit_per_page = data.hit_per_page;
+                var total_page = Math.ceil(total_hit_count/hit_per_page);
+                //console.log(total_hit_count);
+                // console.log(hit_per_page);
+                // console.log(total_page);
+                $("#hit_count").html (total_hit_count+"件ヒットしました");
+                $('#kekka').html("<tr><td>店舗写真</td><td>店舗名</td><td>住所</td><td>電話番号</td><td>お店の紹介</td></tr>");
+                for(var i = 1; i <= total_page; i++ ){
+                    search_restrant_page(pref_code, areacode_m, category_l_code, i);
+                }
+
+            }).fail(function(data){ //ajaxの通信に失敗した場合
+            	alert("データの受信に失敗しました4");
+            });
+        }
+
+        function search_restrant_page(pref_code, areacode_m, category_l_code, offset_page){
+            $.ajax({
+                url: 'http://javascriptajax.azurewebsites.net/takeda/get_restrant_page.php?pref=' + pref_code +  '&areacode_m=' + areacode_m +  '&category_l=' + category_l_code + '&offset_page=' + offset_page,
+                type:'GET',
+                dataType:'json'
+                
+            }).done(function(data){ //ajaxの通信に成功した場合
+
+                //連想配列の長さを得る Object.keysメソッド
+                //console.log(Object.keys(data.rest).length);
+                var rest_length = Object.keys(data.rest).length;
+                //console.log("★"+ rest_length);
+
+                var row_data = "";
+                 for(var i=0; i < rest_length; i++){
+                    row_data += "<tr>";
+                    row_count++;
+                    //店舗写真
+                    row_data += "<td><img src='" + data.rest[i].image_url.shop_image1 + "'>"+"</td>";
+                    //店名をクリックすると店サイトに飛べる
+                    row_data += "<td><a href=" + data.rest[i].url + " target='_blank'</a>"+data.rest[i].name+"</td>";
+                    //緯度・経度を地図表示ボタンに付与
+                    row_data += "<td>" + data.rest[i].address + "　<input type='button' lat="+data.rest[i].latitude+" lon="+data.rest[i].longitude+" name="+data.rest[i].name+" number="+i+" class='place_basyo' value='地図表示'></td>";
+                    //店舗電話番号を表示
+                    row_data += "<td>" + data.rest[i].tel + "</td>";
+
+                    //PR文を表示
+                    if(data.rest[i].pr.pr_long){
+                    row_data += "<td>" + data.rest[i].pr.pr_long + "</td>";
+                    }else{
+                    row_data += "<td>'PR文なし'</td>"
+                    }
+                    //row_data += "<td>" + data.rest[i].pr.pr_long + "</td>";
+                    row_data += "</tr>";
+                }
+                $("#hit_count").html();
+                $("#hit_count").html (row_count+"件ヒットしました");
+                $('#kekka').append(row_data);
+
+
+            }).fail(function(data){ //ajaxの通信に失敗した場合
+            	alert("データの受信に失敗しました5");
+            });
+
+        }
+
+        function showMap(lat,lon,name){
+
+
+        var latlng = new google.maps.LatLng(lat,lon);  //表示する地図の座標を指定する
+        var opts = {
+            zoom: 15, //倍率
+            center: latlng,	//地図の中心座標
+        };
+        //地図を表示する
+            map = new google.maps.Map($("#map_canvas").get(0), opts);
+        };
+
+        function syuhenPin(lat,lon,place_name){
+        //alert("pin");
+        //マーカーの座標を決める
+            myLatlng = new google.maps.LatLng(lat,lon);
+            
+            //吹き出しを設定
+            var contentString = "<p>"+ place_name + "</p>";
+
+            //マーカーを表示
+            marker[ind] = new google.maps.Marker({
+                position: myLatlng,
+                map: map,
+                title:place_name,
+                info:new google.maps.InfoWindow({content : contentString})
+            });
+            
+            
+            var infowindow = new google.maps.InfoWindow({
+                content : contentString
+            });
+
+            //マーカと紐付ける
+            google.maps.event.addListener(marker[ind],"click",function(){
+                //infowindow.open(map,marker[ind]);
+                this.info.open(map,this);
+            });
+
+        };
+
+        $(function(){	//←document.ready
+
+            //■ページを読み込んだらすぐ行う
+            //エリアを表示する
+            set_pref_list();
+            
+            // set_area_list();
+
+            //業態を表示する
+            set_category_l_list();
+
+            //■イベントの割り当て
+            $('#search').on('click',function(){
+                //レストラン検索を行う
+                //表示件数カウント初期化
+                row_count = 0;
+
+                var pref_code = $('#pref').find('option:selected').attr('pref_code');
+                var category_l_code = $('#category_l').find('option:selected').attr('category_l_code');
+                var areacode_m = $('#area_m').find('option:selected').attr('areacode_m');
+                //禁煙席があるかどうか
+                var no_smoking = 0;
+                //テイクアウトがあるかどうか
+                var takeout = 0;
+                //プライベートルームがあるかどうか
+                var private_room = 0;
+                //駐車場があるかどうか
+                var parking = 0;
+                //もしcheckboxにcheckが入っていたら値を１に変える
+                if($("[name=search_check1]").prop("checked")){
+                    no_smoking = 1;
+                };
+                if($("[name=search_check2]").prop("checked")){
+                    takeout = 1;
+                };
+                if($("[name=search_check3]").prop("checked")){
+                    private_room = 1;
+                };
+                if($("[name=search_check4]").prop("checked")){
+                    parking = 1;
+                };
+
+
+                search_restrant(pref_code, areacode_m, category_l_code, no_smoking, takeout, private_room, parking);
+            })
+
+            $('#pref').on('change', function(){
+                set_area_list();
+            })
+
+            //地図表示ボタンが押された
+            $(document).on("click","input.place_basyo",function(){
+            
+            var pin_lat = $(this).attr("lat");
+            var pin_lon = $(this).attr("lon");
+            var pin_name = $(this).attr("name");
+            
+            
+            //googlemapを表示する
+            showMap(pin_lat,
+                    pin_lon,
+                    pin_name);
+            //ピンを立てる
+            syuhenPin(pin_lat,pin_lon,pin_name);
+            ind++;
+            
+            //画面の一番上に移動する
+            window.scroll(0,0);
+
+            });
+
+        }); 
+    
+    </script>
+</head>
+<body>
+	<h1><a href="gurunavi_json_kansei.html" >グルメ情報検索</a></h1>
+    <select id="pref"></select>
+    <select id="area_m"></select>
+    <select id="category_l"></select>
+    
+    <p><label><input type="checkbox" class="search_check" id="no_smoking" name="search_check1">禁煙席あり</label>
+           <label><input type="checkbox" class="search_check" id="takeout" name="search_check2">テイクアウトあり</label>
+           <label><input type="checkbox" class="search_check" id="private_room" name="search_check3">個室あり</label>
+           <label><input type="checkbox" class="search_check" id="parking" name="search_check4">駐車場あり</label></p>
+    
+    
+    <input type="button" id="search" value="検索"><div id="hit_count"></div>
+    
+    <!--<h3>ここに検索結果を表示します</h3>-->
+    
+    <div id="map_canvas" style="width:1250px; height:250px">ここに地図が表示されます</div>
+    <!--<div id="hit_count"></div>-->
+    <table id="kekka" border="1"></table>
+</body>
+</html>
